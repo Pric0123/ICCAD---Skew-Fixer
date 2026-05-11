@@ -299,13 +299,24 @@ def find_best_insert_for_hold(ct, path):
     return best_buf, launch_ff
 
 
-def optimize(ct, ss_data, ff_data, max_iterations=50):
+def optimize(ct, ss_data, ff_data, max_iterations=250):
     inserted = []
+    prev_tns = float("inf")
+    stall_count = 0
 
     for iteration in range(max_iterations):
         results, Tclk, Tsetup, Thold = ct.compute_slack(ss_data, ff_data)
         tns_ss, wns_ss, tns_ff, wns_ff = ct.compute_tns_wns(results)
 
+        total_tns = tns_ss + tns_ff
+        if total_tns >= prev_tns - 1e-6:
+            stall_count += 1
+        else:
+            stall_count = 0
+        prev_tns = total_tns
+        if stall_count >= 8:
+            print(f"[Iter {iteration}] TNS 連續無改善，停止")
+            break
         all_slack = {r["path"]: r for r in results}
         violated_setup = [r for r in results if r["slack_setup"] < 0]
         violated_hold = [r for r in results if r["slack_hold"] < 0]
