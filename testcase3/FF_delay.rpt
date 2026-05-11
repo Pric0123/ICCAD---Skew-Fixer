@@ -1,27 +1,15 @@
 Clock Period : 0.3
 #Path launch DFF capture DFF data path delay
 --------------------------------------------------
-Path1 : FF_11_0 -> FF_4_2 0.023
-Path2 : FF_8_3 -> FF_7_1 0.046
-Path3 : FF_1_3 -> FF_7_2 0.026
-Path4 : FF_4_0 -> FF_5_0 0.017
-Path5 : FF_11_3 -> FF_9_2 0.016
-Path6 : FF_3_3 -> FF_1_0 0.03
-Path7 : FF_7_3 -> FF_6_2 0.017
-Path8 : FF_10_3 -> FF_10_2 0.031
-Path9 : FF_11_2 -> FF_8_1 0.045
-Path10 : FF_2_3 -> FF_9_3 0.023
-Path11 : FF_8_2 -> FF_0_2 0.015
-Path12 : FF_3_0 -> FF_0_3 0.05
-Path13 : FF_10_0 -> FF_3_2 0.028
-Path14 : FF_5_3 -> FF_0_1 0.009
-Path15 : FF_6_1 -> FF_2_0 0.007
-Path16 : FF_4_3 -> FF_8_0 0.01
-Path17 : FF_5_2 -> FF_9_0 0.033
-Path18 : FF_6_0 -> FF_1_1 0.041
-Path19 : FF_1_2 -> FF_10_1 0.024
-Path20 : FF_3_1 -> FF_2_1 0.008
-Path21 : FF_11_1 -> FF_5_1 0.022
-Path22 : FF_6_3 -> FF_2_2 0.05
-Path23 : FF_0_0 -> FF_4_1 0.029
-Path24 : FF_9_1 -> FF_7_0 0.049
+Path1 : FF_5_0 -> FF_1_2 0.032
+Path2 : FF_6_0 -> FF_7_2 0.041
+Path3 : FF_4_1 -> FF_3_1 0.038
+Path4 : FF_5_2 -> FF_3_2 0.029
+Path5 : FF_4_2 -> FF_5_1 0.049
+Path6 : FF_0_1 -> FF_4_0 0.022
+Path7 : FF_7_0 -> FF_2_0 0.03
+Path8 : FF_3_0 -> FF_0_2 0.042
+Path9 : FF_7_1 -> FF_1_1 0.033
+Path10 : FF_6_1 -> FF_2_1 0.044
+Path11 : FF_2_2 -> FF_0_0 0.031
+Path12 : FF_1_0 -> FF_6_2 0.037
