@@ -97,7 +97,7 @@ class ClockTree:
             return False
         fanout = self.get_fanout(node_name)
         if fanout > self.get_max_fanout(new_type):
-            return False  # fanout 超過新 buffer 的限制
+            return False
         old_type = self.nodes[node_name]["cell_type"]
         self.nodes[node_name]["cell_type"] = new_type
         self.resize_log.append({
@@ -164,52 +164,48 @@ class ClockTree:
 # 優化策略
 # ─────────────────────────────────────────
 
-def try_resize_for_setup(ct, path):
-    """
-    嘗試 resize capture FF 路徑上的 buffer（換成更大的）
-    增加 delay → 增加 skew → 改善 setup
-    面積比插新 buffer 省
-    """
+def try_resize_for_setup(ct, path, all_slack=None):
     capture_ff = path["capture"]
     launch_ff = path["launch"]
     capture_bufs = ct.get_path_buffers(capture_ff)
     launch_bufs = set(ct.get_path_buffers(launch_ff))
-
-    # 找只在 capture 路徑上的 buffer（不在 launch 路徑上）
     exclusive_capture = [b for b in capture_bufs if b not in launch_bufs]
-
-    lib_sorted = sorted(ct.lib.items(), key=lambda x: x[1]["area"])
-
+    if all_slack is None:
+        all_slack = {}
+    best_result = None
+    best_delta_ss = 0
     for buf_name in exclusive_capture:
         current_type = ct.nodes[buf_name]["cell_type"]
-        current_area = ct.lib[current_type]["area"]
-
-        for new_type, new_info in lib_sorted:
-            if new_info["area"] <= current_area:
-                continue  # 不考慮換成更小的（不會增加 delay）
-
-            fanout = ct.get_fanout(buf_name)
+        fanout = max(ct.get_fanout(buf_name), 1)
+        old_delay_ss = ct.get_buf_delay(current_type, fanout, "ss")
+        old_delay_ff = ct.get_buf_delay(current_type, fanout, "ff")
+        for new_type in ct.lib:
+            if new_type == current_type:
+                continue
             if fanout > ct.get_max_fanout(new_type):
-                continue  # fanout 超過限制
-
-            # 計算 resize 後的 delay 變化
-            old_delay_ss = ct.get_buf_delay(current_type, max(fanout, 1), "ss")
-            new_delay_ss = ct.get_buf_delay(new_type, max(fanout, 1), "ss")
-            old_delay_ff = ct.get_buf_delay(current_type, max(fanout, 1), "ff")
-            new_delay_ff = ct.get_buf_delay(new_type, max(fanout, 1), "ff")
-
+                continue
+            new_delay_ss = ct.get_buf_delay(new_type, fanout, "ss")
+            new_delay_ff = ct.get_buf_delay(new_type, fanout, "ff")
             delta_ss = new_delay_ss - old_delay_ss
             delta_ff = new_delay_ff - old_delay_ff
-
-            new_slack_setup = path["slack_setup"] + delta_ss
-            new_slack_hold = path["slack_hold"] - delta_ff
-
-            if new_slack_setup > path["slack_setup"] and new_slack_hold >= 0:
-                return buf_name, new_type
-
-    return None, None
-
-
+            if delta_ss <= 0:
+                continue
+            safe = True
+            for pname, pdata in all_slack.items():
+                cap_bufs = set(ct.get_path_buffers(pdata["capture"]))
+                lau_bufs = set(ct.get_path_buffers(pdata["launch"]))
+                if buf_name in cap_bufs and buf_name not in lau_bufs:
+                    if pdata["slack_hold"] - delta_ff < 0:
+                        safe = False
+                        break
+                elif buf_name in lau_bufs and buf_name not in cap_bufs:
+                    if pdata["slack_setup"] + delta_ss < 0:
+                        safe = False
+                        break
+            if safe and delta_ss > best_delta_ss:
+                best_delta_ss = delta_ss
+                best_result = (buf_name, new_type)
+    return best_result if best_result else (None, None)
 def find_best_insert_for_setup(ct, path):
     capture_ff = path["capture"]
     best_buf = None
@@ -230,20 +226,27 @@ def find_best_insert_for_setup(ct, path):
 
 
 def find_best_insert_for_hold(ct, path):
+    """
+    改良版：選 area/delay_ff 比值最小的 buffer（每單位面積 delay 效益最大）
+    同時確保 setup slack 不會因此變成負的
+    """
     launch_ff = path["launch"]
     best_buf = None
-    best_area = float("inf")
+    best_score = float("inf")
 
     for buf_type, buf_info in ct.lib.items():
-        delay_ss = buf_info["ss_delay"][0]
         delay_ff = buf_info["ff_delay"][0]
+        delay_ss = buf_info["ss_delay"][0]
 
         new_slack_hold = path["slack_hold"] + delay_ff
         new_slack_setup = path["slack_setup"] - delay_ss
 
-        if new_slack_setup >= 0 and buf_info["area"] < best_area:
-            best_area = buf_info["area"]
-            best_buf = buf_type
+        if new_slack_setup >= 0 and delay_ff > 0:
+            # 面積除以 delay 效益，越小越好
+            score = buf_info["area"] / delay_ff
+            if score < best_score:
+                best_score = score
+                best_buf = buf_type
 
     return best_buf, launch_ff
 
@@ -274,7 +277,6 @@ def optimize(ct, ss_data, ff_data, max_iterations=50):
         print(f"[Iter {iteration}] {vtype} violation: {vpath['path']} slack={vslack:.4f}")
 
         if vtype == "setup":
-            # 先嘗試 resize（省面積）
             resize_node, resize_type = try_resize_for_setup(ct, vpath)
             if resize_node:
                 old_type = ct.nodes[resize_node]["cell_type"]
@@ -282,7 +284,6 @@ def optimize(ct, ss_data, ff_data, max_iterations=50):
                 print(f"  resize {resize_node}: {old_type} → {resize_type}")
                 continue
 
-            # resize 不行就插新 buffer
             best_buf, target_ff = find_best_insert_for_setup(ct, vpath)
             if best_buf is None:
                 best_buf = min(ct.lib.keys(), key=lambda x: ct.lib[x]["area"])

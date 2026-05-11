@@ -1,0 +1,10 @@
+Root: ROOT_CLK
+ [1] BUF_0 (REALBUF_X8)
+  [2] BUF_4 (REALBUF_X4)
+   [3] FF_37 (FIFO) (SINK)
+   [3] FF_12 (FIFO) (SINK)
+  [2] BUF_81 (REALBUF_X8)
+   [3] BUF_51 (REALBUF_X2)
+    [4] FF_47 (FIFO) (SINK)
+   [3] FF_5 (FIFO) (SINK)
+  [2] FF_24 (FIFO) (SINK)

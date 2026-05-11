@@ -1,0 +1,7 @@
+Clock Period : 0.3
+#Path launch DFF capture DFF data path delay
+--------------------------------------------
+Path1 : FF_5 -> FF_12 0.008
+Path2 : FF_37 -> FF_47 0.010
+Path3 : FF_24 -> FF_37 0.005
+Path4 : FF_12 -> FF_47 0.009

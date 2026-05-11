@@ -9,15 +9,22 @@ def write_clk_tree(ct, input_path, output_path):
     with open(input_path, "r") as f:
         original_lines = f.readlines()
 
-    # 找出所有新插入的 buffer，建立 before -> [new_buf_names] 的對應
-    insert_before = {}
-    for name, node in ct.nodes.items():
-        if not node.get("original", True):
-            if node["children"]:
-                before = node["children"][0]
-                if before not in insert_before:
-                    insert_before[before] = []
-                insert_before[before].append(name)
+    # 對每個原始節點，找出插在它正上方的新 buffer 鏈
+    # 新 buffer 的 children[0] 可能是另一個新 buffer，最終才接到原始節點
+    # 所以要從原始節點往上追，收集所有新 buffer 直到碰到原始節點的 parent
+
+    def get_new_buf_chain(original_node_name):
+        """
+        從 original_node_name 往上追，
+        收集插在它上方的所有新 buffer（按從上到下順序）
+        """
+        chain = []
+        current = ct.nodes[original_node_name]["parent"]
+        while current is not None and not ct.nodes[current].get("original", True):
+            chain.append(current)
+            current = ct.nodes[current]["parent"]
+        chain.reverse()  # 由上到下
+        return chain
 
     output_lines = []
     for line in original_lines:
@@ -39,13 +46,18 @@ def write_clk_tree(ct, input_path, output_path):
         rest = m.group(4).strip()
         sink_str = " (SINK)" if "SINK" in rest else ""
 
-        if node_name in insert_before:
-            for new_buf_name in insert_before[node_name]:
-                new_buf_type = ct.nodes[new_buf_name]["cell_type"]
-                output_lines.append(f" [{level}] {new_buf_name} ({new_buf_type})")
-            level += 1
+        # 取得插在這個節點上方的新 buffer 鏈
+        chain = get_new_buf_chain(node_name)
 
-        output_lines.append(f" [{level}] {node_name} ({cell_type}){sink_str}")
+        if chain:
+            for i, buf_name in enumerate(chain):
+                buf_type = ct.nodes[buf_name]["cell_type"]
+                output_lines.append(f" [{level + i}] {buf_name} ({buf_type})")
+            level += len(chain)
+
+        # 如果 cell_type 被 resize 過，用新的
+        current_type = ct.nodes[node_name]["cell_type"]
+        output_lines.append(f" [{level}] {node_name} ({current_type}){sink_str}")
 
     with open(output_path, "w") as f:
         f.write("\n".join(output_lines) + "\n")
