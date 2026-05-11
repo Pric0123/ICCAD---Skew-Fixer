@@ -206,6 +206,54 @@ def try_resize_for_setup(ct, path, all_slack=None):
                 best_delta_ss = delta_ss
                 best_result = (buf_name, new_type)
     return best_result if best_result else (None, None)
+def try_resize_for_hold(ct, path, all_slack=None):
+    """
+    在 launch 獨占路徑上找 buffer，換成 FF delay 更大的型號
+    增加 launch delay → skew 變小 → hold 改善
+    同時確保不破壞任何路徑的 setup slack
+    """
+    launch_ff = path["launch"]
+    capture_ff = path["capture"]
+    launch_bufs = ct.get_path_buffers(launch_ff)
+    capture_bufs = set(ct.get_path_buffers(capture_ff))
+    exclusive_launch = [b for b in launch_bufs if b not in capture_bufs]
+    if all_slack is None:
+        all_slack = {}
+    best_result = None
+    best_delta_ff = 0
+    for buf_name in exclusive_launch:
+        current_type = ct.nodes[buf_name]["cell_type"]
+        fanout = max(ct.get_fanout(buf_name), 1)
+        old_delay_ff = ct.get_buf_delay(current_type, fanout, "ff")
+        old_delay_ss = ct.get_buf_delay(current_type, fanout, "ss")
+        for new_type in ct.lib:
+            if new_type == current_type:
+                continue
+            if fanout > ct.get_max_fanout(new_type):
+                continue
+            new_delay_ff = ct.get_buf_delay(new_type, fanout, "ff")
+            new_delay_ss = ct.get_buf_delay(new_type, fanout, "ss")
+            delta_ff = new_delay_ff - old_delay_ff
+            delta_ss = new_delay_ss - old_delay_ss
+            if delta_ff <= 0:
+                continue
+            safe = True
+            for pname, pdata in all_slack.items():
+                cap_bufs = set(ct.get_path_buffers(pdata["capture"]))
+                lau_bufs = set(ct.get_path_buffers(pdata["launch"]))
+                if buf_name in lau_bufs and buf_name not in cap_bufs:
+                    if pdata["slack_setup"] + delta_ss < 0:
+                        safe = False
+                        break
+                elif buf_name in cap_bufs and buf_name not in lau_bufs:
+                    if pdata["slack_hold"] - delta_ff < 0:
+                        safe = False
+                        break
+            if safe and delta_ff > best_delta_ff:
+                best_delta_ff = delta_ff
+                best_result = (buf_name, new_type)
+    return best_result if best_result else (None, None)
+
 def find_best_insert_for_setup(ct, path):
     capture_ff = path["capture"]
     best_buf = None
@@ -258,6 +306,7 @@ def optimize(ct, ss_data, ff_data, max_iterations=50):
         results, Tclk, Tsetup, Thold = ct.compute_slack(ss_data, ff_data)
         tns_ss, wns_ss, tns_ff, wns_ff = ct.compute_tns_wns(results)
 
+        all_slack = {r["path"]: r for r in results}
         violated_setup = [r for r in results if r["slack_setup"] < 0]
         violated_hold = [r for r in results if r["slack_hold"] < 0]
 
@@ -300,6 +349,12 @@ def optimize(ct, ss_data, ff_data, max_iterations=50):
                 print(f"  插入 {new_name} ({best_buf}) 在 {target_ff} 上方")
 
         else:  # hold
+            resize_node, resize_type = try_resize_for_hold(ct, vpath, all_slack)
+            if resize_node:
+                old_type = ct.nodes[resize_node]["cell_type"]
+                ct.resize_buffer(resize_node, resize_type)
+                print(f"  resize {resize_node}: {old_type} → {resize_type}")
+                continue
             best_buf, target_ff = find_best_insert_for_hold(ct, vpath)
             if best_buf is None:
                 best_buf = min(ct.lib.keys(), key=lambda x: ct.lib[x]["area"])

@@ -1,0 +1,4 @@
+Clock Period : 0.3
+#Path launch DFF capture DFF data path delay
+--------------------------------------------
+Path1 : FF_LAUNCH -> FF_CAPTURE 0.008
