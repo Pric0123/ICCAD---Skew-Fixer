@@ -48,14 +48,8 @@ def validate(testcase_dir, modified_path):
     if orig_order != mod_orig_order:
         errors.append("既有元件順序改變")
 
-    # 6. fanout 驗證：用 optimizer 跑一次取得內部狀態
-    ss = parse_delay_rpt(f"{testcase_dir}/SS_delay.rpt")
-    ff = parse_delay_rpt(f"{testcase_dir}/FF_delay.rpt")
-    ct = ClockTree({"root": orig["root"], "nodes": orig["nodes"]}, lib)
-    old_stdout = sys.stdout
-    sys.stdout = io.StringIO()
-    optimize(ct, ss, ff)
-    sys.stdout = old_stdout
+    # 6. fanout 驗證：直接對 modified tree 建 ClockTree
+    ct = ClockTree({"root": mod["root"], "nodes": mod["nodes"]}, lib)
 
     for name, node in ct.nodes.items():
         if node["is_sink"]:

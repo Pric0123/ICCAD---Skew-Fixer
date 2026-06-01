@@ -25,15 +25,15 @@ class ClockTree:
                 "level": info["level"],
                 "original": True,
             }
-
-        for i, (name, info) in enumerate(node_list):
+        level_stack = {}
+        for name, info in node_list:
             level = info["level"]
-            for j in range(i - 1, -1, -1):
-                pname, pinfo = node_list[j]
-                if pinfo["level"] == level - 1 and not pinfo["is_sink"]:
-                    self.nodes[name]["parent"] = pname
-                    self.nodes[pname]["children"].append(name)
-                    break
+            level_stack[level] = name
+            parent_level = level - 1
+            if parent_level in level_stack:
+                pname = level_stack[parent_level]
+                self.nodes[name]["parent"] = pname
+                self.nodes[pname]["children"].append(name)
 
     def get_fanout(self, node_name):
         return len(self.nodes[node_name]["children"])
@@ -197,11 +197,9 @@ def try_resize_for_setup(ct, path, all_slack=None):
                 if buf_name in cap_bufs and buf_name not in lau_bufs:
                     if pdata["slack_hold"] - delta_ff < 0:
                         safe = False
-                        break
                 elif buf_name in lau_bufs and buf_name not in cap_bufs:
                     if pdata["slack_setup"] + delta_ss < 0:
                         safe = False
-                        break
             if safe and delta_ss > best_delta_ss:
                 best_delta_ss = delta_ss
                 best_result = (buf_name, new_type)
@@ -244,11 +242,9 @@ def try_resize_for_hold(ct, path, all_slack=None):
                 if buf_name in lau_bufs and buf_name not in cap_bufs:
                     if pdata["slack_setup"] + delta_ss < 0:
                         safe = False
-                        break
                 elif buf_name in cap_bufs and buf_name not in lau_bufs:
                     if pdata["slack_hold"] - delta_ff < 0:
                         safe = False
-                        break
             if safe and delta_ff > best_delta_ff:
                 best_delta_ff = delta_ff
                 best_result = (buf_name, new_type)
@@ -314,7 +310,7 @@ def optimize(ct, ss_data, ff_data, max_iterations=250):
         else:
             stall_count = 0
         prev_tns = total_tns
-        if stall_count >= 8:
+        if stall_count >= 15:
             print(f"[Iter {iteration}] TNS 連續無改善，停止")
             break
         all_slack = {r["path"]: r for r in results}
