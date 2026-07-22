@@ -1,7 +1,5 @@
 # SkewFixer
 
-### ICCAD 2026 CAD Contest - Problem D: Timing Fixing by Useful Skew
-### 出題單位：瑞昱半導體 Realtek Semiconductor Corp.
 
 ## 問題定義
 
